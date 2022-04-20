@@ -4,7 +4,7 @@ import sys
 import datetime
 import os
 import tkinter.filedialog as tk
-
+import re
 
 def openFile(filename):
     infile = open(filename, "r", encoding='utf-8')
@@ -59,7 +59,8 @@ def parseContent(content):
 
     Main_category = ""
     current_month = get_month(datetime.datetime.now().month)
-    
+    extract_stats(content)
+    year = 0
 
     for idx in range(len(content)):
         line = content[idx][:-1]
@@ -115,15 +116,50 @@ def parseContent(content):
             except KeyError as e:
                 pass
 
-    # for mnd_key in mnd:
-    #     print("_"*200)
-    #     for cat in mnd[mnd_key]:
-    #         if not (cat == "mnd_nr"):
-    #             print("")
-    #             for butikk in mnd[mnd_key][cat]["Butikker"]:
-    #                 print("{:10} {:30} {:100} {:.2f}".format(mnd_key, cat, butikk, mnd[mnd_key][cat]["Butikker"][butikk]))
     return mnd, content_dict, year
 
+def extract_stats(content):
+    return_dict= {}
+    category = ""
+    sum = 0
+    content_string = "".join(content).replace("\n","\n")
+    # stats = re.compile(r'''
+    #     ^(?P<Transaction_name>(\w*\s*[/&]*){0,5})
+    #     (?P<sum>((-?)\d*\s*\d*,\d*))
+    #     (?P<method>(\w*\s*){0,5})
+    #     (?P<category>(\w*\s*){0,5})$
+    # ''')
+    # print(content_string)
+
+    stats = re.compile(r"""(?P<Transaction_name>(\w+[/&,]*[^\S\r\n]*){1,5})
+(?P<sum>(-?\d*\s*\d+,\d+))
+(?P<method>(\w+[/&,]*[^\S\r\n]*){1,5})
+(?P<category>(\w+[/&,]*[^\S\r\n]*){1,5})""")
+    # print(stats)
+
+    matches = re.finditer(stats,content_string)
+    # print(matches)
+
+    for match in matches:
+        Transaction_name,sum, method, category = match.group("Transaction_name","sum", "method", "category")
+        if not category in return_dict.keys():
+            return_dict[category] = {}
+        if not Transaction_name in return_dict[category].keys():
+            return_dict[category][Transaction_name] = {}
+        if not "sum" in return_dict[category][Transaction_name].keys():
+            return_dict[category][Transaction_name]["sum"] = float(sum.replace(",",".").replace(" ",""))
+        else:
+            return_dict[category][Transaction_name]["sum"] += float(sum.replace(",",".").replace(" ",""))
+        if not "method" in return_dict[category][Transaction_name].keys():
+            return_dict[category][Transaction_name]["method"] = [method]
+        else:
+            return_dict[category][Transaction_name]["method"].append(method)
+
+    for key in return_dict:
+        print(key)
+        for subkey in return_dict[key]:
+            print("  %50s:%10.2f  "%(subkey, return_dict[key][subkey]["sum"]), return_dict[key][subkey]["method"])
+    return return_dict
 
 def write_CSV_file(mnd_content, content_dict, csv_filename):
     outfile_csv = open(csv_filename, "w", encoding='utf-8')
